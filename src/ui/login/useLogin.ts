@@ -1,44 +1,43 @@
 import { useState } from 'react';
+import { login } from '../../data/api/authApi';
 import { LoginUiState, initialLoginState } from './login.state';
 
 export function useLogin(onSuccess: () => void) {
   const [uiState, setUiState] = useState<LoginUiState>(initialLoginState);
 
   const onEmailChange = (email: string) => {
-    setUiState(prev => ({ ...prev, email, error: null }));
+    setUiState((prev: LoginUiState) => ({ ...prev, email, error: null }));
   };
 
   const onPasswordChange = (password: string) => {
-    setUiState(prev => ({ ...prev, password, error: null }));
+    setUiState((prev: LoginUiState) => ({ ...prev, password, error: null }));
   };
 
   const onLoginClick = async () => {
     if (!uiState.email || !uiState.password) {
-      setUiState(prev => ({
+      setUiState((prev: LoginUiState) => ({
         ...prev,
         error: 'فیلدها نباید خالی باشند',
       }));
       return;
     }
 
-    setUiState(prev => ({ ...prev, isLoading: true, error: null }));
+    setUiState((prev: LoginUiState) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      // 🔥 معادل networkService.login
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // TODO:
-      // tokenProvider.setToken(...)
-      // userProvider.setCurrentUser(...)
-      // setLoggedIn(true)
-
-      setUiState(prev => ({ ...prev, isLoading: false }));
+      await login({
+        emailOrPhone: uiState.email.trim(),
+        password: uiState.password,
+      });
+      setUiState((prev: LoginUiState) => ({ ...prev, isLoading: false }));
       onSuccess();
-    } catch (e) {
-      setUiState(prev => ({
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ?? e?.message ?? 'خطا در ارتباط با سرور';
+      setUiState((prev: LoginUiState) => ({
         ...prev,
         isLoading: false,
-        error: 'خطا در ارتباط با سرور',
+        error: message,
       }));
     }
   };
