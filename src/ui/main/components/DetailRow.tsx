@@ -22,9 +22,11 @@ const styles = StyleSheet.create({
   row: {
     padding: 12,
     borderRadius: 16,
-    backgroundColor: '#141a2d',
+    backgroundColor: '#ffffff', 
+    borderWidth: 1,
+    borderColor: '#d1d1d1', 
   },
-  label: { color: '#b7bfd3', fontSize: 12, marginBottom: 6 },
-  value: { color: 'white', fontSize: 14 },
-  header: { fontSize: 16, fontWeight: '700' },
+  label: { color: '#555555', fontSize: 12, marginBottom: 6 },
+  value: { color: '#111111', fontSize: 14 }, 
+  header: { fontSize: 16, fontWeight: '700', color: '#000000' }, 
 });

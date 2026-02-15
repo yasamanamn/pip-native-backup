@@ -1,6 +1,6 @@
 import React from "react";
 import { View, TextInput, StyleSheet, TouchableOpacity } from "react-native";
-import { MdSearch, MdClose } from "react-icons/md";
+import { MdSearch } from 'react-icons/md';
 
 type Props = {
   query: string;
@@ -8,19 +8,23 @@ type Props = {
   placeholder?: string;
   enabled?: boolean;
   singleLine?: boolean;
+  onFocus?: () => void;
+  autoFocus?: boolean;
 };
 
 export default function SearchBox({
   query,
   onQueryChanged,
-  placeholder = "جست و جو",
+  placeholder = "...جست و جو",
   enabled = true,
   singleLine = true,
+  onFocus,
+  autoFocus = false,
 }: Props) {
   return (
     <View style={styles.wrap}>
-      <MdSearch size={20} color="#8b93a7" style={styles.leadingIcon} />
-
+      <MdSearch size={20} color="#9ca3af" style={styles.icon} />
+      
       <TextInput
         value={query}
         onChangeText={onQueryChanged}
@@ -29,53 +33,46 @@ export default function SearchBox({
         editable={enabled}
         style={styles.input}
         returnKeyType="search"
+        onFocus={onFocus}
+        autoFocus={autoFocus}
       />
 
       {query.length > 0 && (
-        <TouchableOpacity onPress={() => onQueryChanged("")}>
-          <MdClose size={20} color="#8b93a7" style={styles.trailingIcon} />
+        <TouchableOpacity onPress={() => onQueryChanged("")} style={styles.clearButton}>
+          ✕
         </TouchableOpacity>
       )}
     </View>
   );
 }
 
-
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1f2937",   
-    borderRadius: 30,           
+    backgroundColor: "#ffffff",
+    borderRadius: 30,
     paddingHorizontal: 16,
-    marginVertical: 10,
     height: 48,
-
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
+    elevation: 3,
+    width: 300,
   },
-
+  icon: {
+    marginLeft: 10, 
+  },
   input: {
     flex: 1,
-    color: "#ffffff",
+    color: "#0f172a",
     fontSize: 15,
     textAlign: "right",
-    writingDirection: "rtl",
-    paddingVertical: 0,
-    backgroundColor: "transparent",
-    borderWidth: 0,
+    marginVertical: 0,
+    marginBottom: 5, 
     outlineStyle: "none",
-    marginHorizontal: 10,
   },
-
-  leadingIcon: {
-    marginLeft: 4,
-  },
-
-  trailingIcon: {
-    marginRight: 4,
+  clearButton: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#6b7280",
   },
 });
+

@@ -117,7 +117,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { minHeight: '100vh', backgroundColor: '#0b1020' },
+  container: { minHeight: '100vh', backgroundColor: '#ffff' },
   fullCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   centerWrapper: { width: '100%', maxWidth: 400, justifyContent: 'center', alignItems: 'center' },
   card: { width: '100%', backgroundColor: '#fff', borderRadius: 25, padding: 25, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12 },

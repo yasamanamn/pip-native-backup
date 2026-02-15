@@ -9,7 +9,6 @@ android {
     compileSdkVersion 34
     buildToolsVersion "34.0.0"
 
-    // ۱. اجبار به استفاده از NDK مورد نظر (اینجا اضافه شد)
     ndkVersion = "27.1.12297006"
 
     defaultConfig {
@@ -19,7 +18,6 @@ android {
         versionCode 1
         versionName "1.0"
 
-        // ۲. تنظیمات CMake برای حل ارور C++20 (اینجا اضافه شد)
         externalNativeBuild {
             cmake {
                 arguments "-DANDROID_STL=c++_shared",
@@ -29,7 +27,6 @@ android {
         }
     }
 
-    // ۳. تعیین نسخه CMake (خارج از defaultConfig اما داخل android)
     externalNativeBuild {
         cmake {
             version "3.22.1"
@@ -64,7 +61,6 @@ android {
         jvmTarget = "17"
     }
     
-    // ۴. برای جلوگیری از تداخل کتابخانه‌های Native (اختیاری اما مفید)
     packagingOptions {
         pickFirst '**/libc++_shared.so'
     }
