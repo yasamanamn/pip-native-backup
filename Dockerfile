@@ -18,7 +18,7 @@ COPY . .
 # 6. Expose the port used by Webpack
 # Webpack Dev Server defaults to 8080. 
 # If your webpack.config.js sets a different port, change it here.
-EXPOSE 8080
+EXPOSE 3001
 
 # 7. Start the web development server
 # This runs "webpack serve --mode development" from your scripts
