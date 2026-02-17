@@ -4,20 +4,22 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 module.exports = {
   mode: 'development',
   entry: path.resolve(__dirname, 'index.web.js'),
-  output: {
-    path: path.resolve(__dirname, 'dist'),
-    filename: 'bundle.js',
-    publicPath: '/',
-    clean: true,
-  },
+ output: {
+  path: path.resolve(__dirname, 'dist'),
+  filename: 'bundle.js',
+  publicPath: '/',
+  clean: true,
+},
+
   resolve: {
-    alias: {
-      'react-native$': 'react-native-web',
-      // Explicitly point to the core package to help resolution
-      'react-native-worklets': 'react-native-worklets-core', 
-    },
-    extensions: ['.web.js', '.web.tsx', '.js', '.jsx', '.ts', '.tsx'],
+  alias: {
+    'react-native$': 'react-native-web',
+    'react-native-reanimated': path.resolve(__dirname, 'reanimated-web-shim.js'),
+    'react-native-worklets': 'react-native-worklets-core',
   },
+  extensions: ['.web.js', '.web.tsx', '.js', '.jsx', '.ts', '.tsx'],
+},
+
   // This section silences the TurboModuleRegistry warning
   stats: {
     warningsFilter: [/export 'TurboModuleRegistry' was not found in 'react-native'/],

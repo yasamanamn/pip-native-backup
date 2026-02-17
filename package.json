@@ -9,7 +9,7 @@
     "start": "react-native start",
     "test": "jest",
     "web": "webpack serve --mode development --host 0.0.0.0",
-    "build-web": "react-scripts build"
+  "build-web": "webpack --config webpack.config.js --mode production"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
