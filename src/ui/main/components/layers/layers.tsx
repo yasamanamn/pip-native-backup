@@ -37,6 +37,17 @@ interface Layer {
   posY: number;
 }
 
+interface FloorInfo {
+  id: number;
+  number: number;
+  isHalf: boolean;
+  isSite: boolean;
+  plotUrl: string;
+  plotThumbUrl?: string | null;
+  application: string;
+  layers?: any[];
+}
+
 interface LayersScreenProps {
   visible?: boolean;
   onClose?: () => void;
@@ -44,7 +55,20 @@ interface LayersScreenProps {
   layers?: Layer[];
   floorId: string;
   onImageUpload?: (imageUri: string) => void;
+  floors?: FloorInfo[];
+  currentFloor?: FloorInfo;
+  onFloorSelect?: (floor: FloorInfo) => void;
 }
+
+const FLOOR_APPLICATION_FA: Record<string, string> = {
+  RESIDENTIAL: 'مسکونی',
+  COMMERCIAL: 'تجاری',
+  OFFICE: 'اداری',
+  INDUSTRIAL: 'صنعتی',
+  PARKING: 'پارکینگ',
+  STORAGE: 'انبار',
+  OTHER: 'سایر',
+};
 
 const PlacedLayerMarker: React.FC<{
   layer: Layer;
@@ -174,6 +198,9 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
   layers = [],
   floorId,
   onImageUpload,
+  floors = [],
+  currentFloor,
+  onFloorSelect,
 }) => {
   const [draggingType, setDraggingType] = useState<string | null>(null);
   const dragX = useSharedValue(0);
@@ -542,6 +569,19 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
               <View style={styles.headerContent}>
                 <View style={styles.headerTextContainer}>
                   <Text style={styles.popupTitle}>مدیریت لایه‌ها</Text>
+                  {currentFloor && (
+                    <Text style={styles.popupSubtitle}>
+                      {currentFloor.isSite
+                        ? 'سایت'
+                        : currentFloor.isHalf
+                          ? `نیم‌طبقه ${currentFloor.number}`
+                          : currentFloor.number === 0
+                            ? 'همکف'
+                            : `طبقه ${currentFloor.number}`}
+                      {' • '}
+                      {FLOOR_APPLICATION_FA[currentFloor.application] || currentFloor.application}
+                    </Text>
+                  )}
                 </View>
               </View>
               <TouchableOpacity 
@@ -551,6 +591,50 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
             </View>
+
+            {/* بخش انتخاب طبقه */}
+            {floors.length > 0 && (
+              <View style={styles.floorSelectorSection}>
+                <View style={styles.floorSelectorHeader}>
+                  <Text style={styles.floorSelectorTitle}>نمای طبقه</Text>
+                  {floors.length > 3 && (
+                    <Text style={styles.floorScrollHint}>← کشیدن برای مشاهده بیشتر</Text>
+                  )}
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.floorButtonsScroll}
+                  contentContainerStyle={styles.floorButtonsContent}
+                >
+                  {floors.map((floorItem) => (
+                    <TouchableOpacity
+                      key={floorItem.id}
+                      style={[
+                        styles.floorButton,
+                        currentFloor?.id === floorItem.id && styles.floorButtonActive
+                      ]}
+                      onPress={() => onFloorSelect && onFloorSelect(floorItem)}
+                    >
+                      <Text
+                        style={[
+                          styles.floorButtonText,
+                          currentFloor?.id === floorItem.id && styles.floorButtonTextActive
+                        ]}
+                      >
+                        {floorItem.isSite
+                          ? 'سایت'
+                          : floorItem.isHalf
+                            ? `نیم‌طبقه ${floorItem.number}`
+                            : floorItem.number === 0
+                              ? 'همکف'
+                              : `طبقه ${floorItem.number}`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             <View style={styles.popupContent}>
               {/* بخش پیش‌نمایش تصویر */}
@@ -874,17 +958,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-  headerIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerIcon: {
-    fontSize: 24,
-  },
   headerTextContainer: {
     gap: 4,
     textAlign: 'right',
@@ -912,6 +985,57 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#666666',
     fontWeight: '600',
+  },
+  floorSelectorSection: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#ffffff',
+  },
+  floorSelectorHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  floorSelectorTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  floorScrollHint: {
+    fontSize: 11,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+  floorButtonsScroll: {
+    flexDirection: 'row',
+  },
+  floorButtonsContent: {
+    paddingRight: 8,
+    gap: 8,
+  },
+  floorButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    marginRight: 8,
+  },
+  floorButtonActive: {
+    borderColor: '#0284C7',
+    backgroundColor: '#EFF6FF',
+  },
+  floorButtonText: {
+    fontSize: 12,
+    color: '#374151',
+  },
+  floorButtonTextActive: {
+    color: '#0C4A6E',
+    fontWeight: '500',
   },
   popupContent: {
     flexDirection: width > 768 ? 'row' : 'column',
