@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     position: 'absolute',
-    top: 12,
+    top: 16,
     left: 12,
     zIndex: 10,
     width: 36,
@@ -523,7 +523,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f9fafb',
   },
   closeBtn: {
     position: 'absolute',

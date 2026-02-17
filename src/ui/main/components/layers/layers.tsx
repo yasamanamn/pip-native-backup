@@ -150,7 +150,6 @@ const PlacedLayerMarker: React.FC<{
           alt="لایه"
         />
 
-        {/* دکمه حذف */}
         <div
           onClick={(e) => {
             e.stopPropagation();
@@ -199,25 +198,48 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
   floorId,
   onImageUpload,
   floors = [],
-  currentFloor,
+  currentFloor: initialCurrentFloor,
   onFloorSelect,
 }) => {
   const [draggingType, setDraggingType] = useState<string | null>(null);
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
   const isDragging = useSharedValue(false);
-  const [localLayers, setLocalLayers] = useState<Layer[]>(layers);
   const [showFilters, setShowFilters] = useState(false);
 
   const [showPopup, setShowPopup] = useState(visible);
   const [showAddMenu, setShowAddMenu] = useState(false);
 
-  const [imageUrl, setImageUrl] = useState<string | null>(initialImageUrl);
+  const [internalCurrentFloor, setInternalCurrentFloor] = useState<FloorInfo | null>(initialCurrentFloor || null);
+  const [internalFloorId, setInternalFloorId] = useState<string>(floorId);
+  const [imageUrl, setImageUrl] = useState<string | null>(
+    initialCurrentFloor?.plotUrl || initialImageUrl || null
+  );
+  const [localLayers, setLocalLayers] = useState<Layer[]>(
+    (initialCurrentFloor?.layers as Layer[]) || layers
+  );
+
   const imageContainerRef = useRef<any>(null);
   const [webDragging, setWebDragging] = useState(false);
   const [webDragPos, setWebDragPos] = useState({ x: 0, y: 0 });
   const [webDragType, setWebDragType] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setInternalCurrentFloor(initialCurrentFloor || null);
+      setInternalFloorId(floorId);
+      setImageUrl(initialCurrentFloor?.plotUrl || initialImageUrl || null);
+      setLocalLayers((initialCurrentFloor?.layers as Layer[]) || layers);
+    }
+  }, [visible]);
+
+  const handleInternalFloorSelect = (floor: FloorInfo) => {
+    setInternalCurrentFloor(floor);
+    setInternalFloorId(String(floor.id));
+    setImageUrl(floor.plotUrl || null);
+    setLocalLayers((floor.layers as Layer[]) || []);
+  };
 
   const addLayerToState = (newLayer: Layer) => {
     setLocalLayers(prev => [...prev, newLayer]);
@@ -225,8 +247,8 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
 
   const saveLayerToAPI = async (newLayer: Layer) => {
     try {
-      if (!floorId) return;
-      const response = await apiAddLayer(floorId, newLayer);
+      if (!internalFloorId) return;
+      const response = await apiAddLayer(internalFloorId, newLayer);
       console.log('پاسخ سرور:', response.data);
       const savedLayer = response.data.data;
 
@@ -242,7 +264,7 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
   };
 
   const handleSaveAll = async () => {
-    if (!floorId) return;
+    if (!internalFloorId) return;
     setIsSaving(true);
 
     try {
@@ -250,11 +272,11 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
 
       for (const layer of localLayers) {
         if (layer.id.startsWith('temp_')) {
-          const response = await apiAddLayer(floorId, layer);
+          const response = await apiAddLayer(internalFloorId, layer);
           const savedLayer = response.data.data;
           updatedLayers.push({ ...layer, id: savedLayer.id });
         } else {
-          await apiUpdateLayer(floorId, layer.id, {
+          await apiUpdateLayer(internalFloorId, layer.id, {
             posX: layer.posX,
             posY: layer.posY,
             type: layer.type,
@@ -280,14 +302,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
   useEffect(() => {
     setShowPopup(visible);
   }, [visible]);
-
-  useEffect(() => {
-    setLocalLayers(layers);
-  }, [layers]);
-
-  useEffect(() => {
-    setImageUrl(initialImageUrl);
-  }, [initialImageUrl]);
 
   const handleClosePopup = () => {
     setShowPopup(false);
@@ -371,7 +385,7 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [webDragging, webDragType, floorId]);
+  }, [webDragging, webDragType, internalFloorId]);
 
   const DraggableIcon = ({ type }: { type: string }) => {
     const isWeb = Platform.OS === "web";
@@ -492,12 +506,12 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
     try {
       setLocalLayers(prev => prev.filter(l => l.id !== layerId));
       
-      if (!layerId.startsWith('temp_') && floorId) {
-        await apiDeleteLayer(floorId, layerId);
+      if (!layerId.startsWith('temp_') && internalFloorId) {
+        await apiDeleteLayer(internalFloorId, layerId);
       }
     } catch (err) {
       console.error('خطا در حذف لایه:', err);
-      setLocalLayers(layers);
+      setLocalLayers(localLayers);
     }
   };
 
@@ -523,7 +537,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.popupContainer, { maxWidth: Math.min(width * 0.95, 1200) }]}>
-            {/* آیکون شبح درگ برای موبایل */}
             {Platform.OS !== 'web' && draggingType && (
               <Animated.View style={dragStyle} pointerEvents="none">
                 <Image
@@ -538,7 +551,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
               </Animated.View>
             )}
 
-            {/* آیکون شبح درگ برای وب */}
             {Platform.OS === 'web' && webDragging && webDragType && (
               <div
                 style={{
@@ -564,22 +576,21 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
               </div>
             )}
 
-            {/* هدر */}
             <View style={styles.popupHeader}>
               <View style={styles.headerContent}>
                 <View style={styles.headerTextContainer}>
                   <Text style={styles.popupTitle}>مدیریت لایه‌ها</Text>
-                  {currentFloor && (
+                  {internalCurrentFloor && (
                     <Text style={styles.popupSubtitle}>
-                      {currentFloor.isSite
+                      {internalCurrentFloor.isSite
                         ? 'سایت'
-                        : currentFloor.isHalf
-                          ? `نیم‌طبقه ${currentFloor.number}`
-                          : currentFloor.number === 0
+                        : internalCurrentFloor.isHalf
+                          ? `نیم‌طبقه ${internalCurrentFloor.number}`
+                          : internalCurrentFloor.number === 0
                             ? 'همکف'
-                            : `طبقه ${currentFloor.number}`}
+                            : `طبقه ${internalCurrentFloor.number}`}
                       {' • '}
-                      {FLOOR_APPLICATION_FA[currentFloor.application] || currentFloor.application}
+                      {FLOOR_APPLICATION_FA[internalCurrentFloor.application] || internalCurrentFloor.application}
                     </Text>
                   )}
                 </View>
@@ -592,7 +603,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* بخش انتخاب طبقه */}
             {floors.length > 0 && (
               <View style={styles.floorSelectorSection}>
                 <View style={styles.floorSelectorHeader}>
@@ -612,14 +622,14 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
                       key={floorItem.id}
                       style={[
                         styles.floorButton,
-                        currentFloor?.id === floorItem.id && styles.floorButtonActive
+                        internalCurrentFloor?.id === floorItem.id && styles.floorButtonActive
                       ]}
-                      onPress={() => onFloorSelect && onFloorSelect(floorItem)}
+                      onPress={() => handleInternalFloorSelect(floorItem)}
                     >
                       <Text
                         style={[
                           styles.floorButtonText,
-                          currentFloor?.id === floorItem.id && styles.floorButtonTextActive
+                          internalCurrentFloor?.id === floorItem.id && styles.floorButtonTextActive
                         ]}
                       >
                         {floorItem.isSite
@@ -637,7 +647,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
             )}
 
             <View style={styles.popupContent}>
-              {/* بخش پیش‌نمایش تصویر */}
               <View style={styles.imageSection}>
                 {Platform.OS === 'web' ? (
                   <div
@@ -733,7 +742,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
                                   style={styles.layerMarkerIcon}
                                   resizeMode="contain"
                                 />
-                                {/* دکمه حذف */}
                                 <TouchableOpacity
                                   onPress={() => handleDeleteLayer(layer.id)}
                                   style={{
@@ -760,7 +768,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
                     ) : (
                       <View style={styles.emptyImageState}>
                         <Text style={styles.emptyImageText}>تصویری موجود نیست</Text>
-                       
                       </View>
                     )}
                   </View>
@@ -774,7 +781,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* پنل لایه‌ها */}
               <View style={styles.layersPanel}>
                 <View style={styles.layersPanelHeader}>
                   <Text style={styles.layersPanelTitle}>فیلترهای نمایش</Text>
@@ -817,7 +823,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
                   )}
                 </ScrollView>
 
-                {/* دکمه باز کردن منوی افزودن */}
                 <View style={styles.addMenuContainer}>
                   <TouchableOpacity
                     style={[styles.addMenuTrigger, showAddMenu && styles.addMenuTriggerActive]}
@@ -866,7 +871,6 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
                   )}
                 </View>
 
-                {/* دکمه ذخیره */}
                 <View style={styles.saveButtonContainer}>
                   <TouchableOpacity
                     style={styles.saveButton}
