@@ -12,6 +12,8 @@ COPY package.json package-lock.json ./
 # sometimes have conflicting peer dependencies in the npm ecosystem.
 RUN npm install --legacy-peer-deps
 
+RUN ln -s /app/node_modules/react-native-worklets-core /app/node_modules/react-native-worklets
+
 # 5. Copy the rest of the source code
 COPY . .
 
