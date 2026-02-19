@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View, Image, ScrollView } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigate } from 'react-router-dom';
-import { MdArrowBack, MdZoomIn, MdClose, MdSearch } from 'react-icons/md';
+import { MdArrowBack, MdZoomIn, MdClose, MdAssignment, MdChecklist } from 'react-icons/md';
 
 import Map3DWeb from './components/leaflet/Map3DWeb.ReactNative';
 import DetailRow from './components/DetailRow';
@@ -12,6 +11,10 @@ import { ApiBuilding, ApiBuildingSummaryInfo } from '../../types/building';
 import { useMainViewModel } from './MainViewModel';
 import { LAYER_ICON_SRC, LAYER_FA } from '../../constants/layerIcons';
 import LayersScreen from './components/layers/layers';
+import PipFormModal from './components/forms/PipFormModal';
+import ChecklistModal from './components/forms/ChecklistModal';
+import TabletSidebar from './components/sidebar/TabletSidebar';
+
 
 type FloorInfo = {
   id: number;
@@ -84,6 +87,10 @@ export default function MainScreenWeb() {
 
   const [layersModalVisible, setLayersModalVisible] = useState(false);
   const [selectedFloorForLayers, setSelectedFloorForLayers] = useState<FloorInfo | null>(null);
+const [activeTab, setActiveTab] = useState<'map' | 'pip' | 'checklist' | 'notifications' | 'profile' | 'dashboard'>('map');
+  // ── NEW: PIP form and Checklist modals ──
+  const [pipFormVisible, setPipFormVisible] = useState(false);
+  const [checklistVisible, setChecklistVisible] = useState(false);
 
   const navigate = useNavigate();
 
@@ -111,7 +118,6 @@ export default function MainScreenWeb() {
   const handleProjectClick = (b: ApiBuildingSummaryInfo) => {
     actions.onSelectProject(b);
     setIsLeftPaneOpen(true);
-
     if (b.latitude && b.longitude) {
       setMapTarget({
         latitude: b.latitude,
@@ -120,10 +126,14 @@ export default function MainScreenWeb() {
       });
     }
   };
+const handleTabChange = (tab: typeof activeTab) => {
+  setActiveTab(tab);
+  if (tab === 'pip') setPipFormVisible(true);
+  if (tab === 'checklist') setChecklistVisible(true);
+};
 
   const handleProjectSelected = (renovationCode: string | null | undefined) => {
     if (!renovationCode) return;
-    console.log('Selected building code:', renovationCode);
     navigate(`/summary/${renovationCode}`);
   };
 
@@ -169,25 +179,26 @@ export default function MainScreenWeb() {
 
   return (
     <View style={styles.root}>
+         <TabletSidebar
+      activeTab={activeTab}
+      onTabChange={handleTabChange}
+      notificationCount={3}       
+      userName="علی رضایی"
+      userRole="بازرس ارشد"
+      onLogout={() => { /* logout logic */ }}
+    />
       {isLeftPaneOpen && (
         <View style={styles.leftPane}>
           <View style={styles.leftPaneHeader}>
             {(selectedBuilding || selectedStory) ? (
-              <TouchableOpacity
-                style={styles.backBtn}
-                onPress={handleBackToSearch}
-              >
+              <TouchableOpacity style={styles.backBtn} onPress={handleBackToSearch}>
                 <MdArrowBack size={22} color="#666" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={handleCloseLeftPane}
-              >
+              <TouchableOpacity style={styles.closeBtn} onPress={handleCloseLeftPane}>
                 <MdClose size={22} color="#666" />
               </TouchableOpacity>
             )}
-
             <View style={styles.searchInPane}>
               <SearchBox
                 query={uiState.query}
@@ -241,6 +252,7 @@ export default function MainScreenWeb() {
             />
           </View>
         )}
+
         <Map3DWeb
           flyToLocation={mapTarget}
           onBuildingSelect={handleBuildingSelect}
@@ -262,6 +274,16 @@ export default function MainScreenWeb() {
           onFloorSelect={handleFloorSelect}
         />
       )}
+
+      {/* ── NEW MODALS ── */}
+      <PipFormModal
+        visible={pipFormVisible}
+        onClose={() => setPipFormVisible(false)}
+      />
+      <ChecklistModal
+        visible={checklistVisible}
+        onClose={() => setChecklistVisible(false)}
+      />
     </View>
   );
 }
@@ -314,7 +336,6 @@ function BuildingInformation({
               <Text style={styles.buildingCode}>کد پروژه: {story.renovationCode}</Text>
             </View>
           </View>
-
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statText}>ارتفاع: {Math.round(story.height)} متر</Text>
@@ -396,16 +417,12 @@ function BuildingInformation({
                 style={styles.floorPlanImage}
                 resizeMode="contain"
               />
-
               {(floor.layers || []).map((layer) => (
                 <TouchableOpacity
                   key={layer.id}
                   style={[
                     styles.layerMarker,
-                    {
-                      left: `${layer.posX * 100}%`,
-                      top: `${layer.posY * 100}%`,
-                    },
+                    { left: `${layer.posX * 100}%`, top: `${layer.posY * 100}%` },
                   ]}
                   onPress={(e) => {
                     e.stopPropagation();
@@ -419,7 +436,6 @@ function BuildingInformation({
                   />
                 </TouchableOpacity>
               ))}
-
               <View style={styles.imageZoomHint}>
                 <MdZoomIn size={20} color="#fff" />
                 <Text style={styles.imageZoomText}>کلیک برای مدیریت لایه‌ها</Text>
@@ -496,6 +512,70 @@ const styles = StyleSheet.create({
     zIndex: 10,
     width: 300,
   },
+
+  actionButtons: {
+    position: 'absolute',
+    bottom: 24,
+    right: 16,
+    zIndex: 10,
+    flexDirection: 'column',
+    gap: 10,
+    justifyContent:'flex-start',
+    alignItems:'center',
+  },
+  pipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#ffff',
+    shadowColor: '#0C4A6E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+  },
+  checklistBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#ffff',
+    shadowColor: '#166534',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+  },
+  btnIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnIconWrapGreen: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pipBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0C4A6E',
+  },
+  checklistBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#166534',
+  },
+
   item: {
     padding: 12,
     borderRadius: 16,

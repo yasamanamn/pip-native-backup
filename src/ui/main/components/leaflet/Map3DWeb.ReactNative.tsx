@@ -730,44 +730,7 @@ export default function Map3DWeb({
         </View>
       )}
 
-      {/* Control Buttons */}
-      <View style={styles.controlButtons}>
-        <TouchableOpacity 
-          style={[styles.controlButton, !selectedStory && styles.controlButtonDisabled]} 
-          onPress={handleFitToFeatures}
-          disabled={!selectedStory}
-        >
-          <Text style={styles.iconText}>🔍</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.controlButton, !selectedStory && styles.controlButtonDisabled]} 
-          onPress={handleHideSelected}
-          disabled={!selectedStory}
-        >
-          <Text style={styles.iconText}>👁️</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.controlButton, !selectedStory && styles.controlButtonDisabled]} 
-          onPress={handleUnhideSelected}
-          disabled={!selectedStory}
-        >
-          <Text style={styles.iconText}>👁️‍🗨️</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.controlButton} onPress={handleResetHidden}>
-          <Text style={styles.iconText}>🔄</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.controlButton} onPress={handleResetMap}>
-          <Text style={styles.iconText}>🗺️</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.controlButton} onPress={handleReloadGeometry}>
-          <Text style={styles.iconText}>↻</Text>
-        </TouchableOpacity>
-      </View>
+    
 
       {/* Layers Modal */}
       <LayersScreen
