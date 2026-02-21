@@ -1,20 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View, Image, ScrollView } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Image,
+  ScrollView,
+  SafeAreaView,
+} from 'react-native';
 import { useNavigate } from 'react-router-dom';
 import { MdArrowBack, MdZoomIn, MdClose, MdAssignment, MdChecklist } from 'react-icons/md';
 
 import Map3DWeb from './components/leaflet/Map3DWeb.ReactNative';
-import DetailRow from './components/DetailRow';
 import SearchBox from './components/SearchBox';
-type SearchBoxVariant = 'overlay' | 'inline';
-import { ApiBuilding, ApiBuildingSummaryInfo } from '../../types/building';
+import { ApiBuildingSummaryInfo } from '../../types/building';
 import { useMainViewModel } from './MainViewModel';
 import { LAYER_ICON_SRC, LAYER_FA } from '../../constants/layerIcons';
 import LayersScreen from './components/layers/layers';
-import PipFormModal from './components/forms/PipFormModal';
-import ChecklistModal from './components/forms/ChecklistModal';
 import TabletSidebar from './components/sidebar/TabletSidebar';
+import { getBuildingForms, getFormById } from '../../services/forms.service';
+import { api } from '../../config/api.config';
 
+import FormResponsePage from './components/forms/formspage';
 
 type FloorInfo = {
   id: number;
@@ -35,6 +45,7 @@ type LayerInfo = {
   posX: number;
   posY: number;
   rotationDeg?: number | null;
+  forms: any[];
 };
 
 type StoryInfo = {
@@ -76,23 +87,25 @@ const FLOOR_APPLICATION_FA: Record<string, string> = {
 
 export default function MainScreenWeb() {
   const { uiState, actions } = useMainViewModel();
-  const [selectedBuildingCode, setSelectedBuildingCode] = useState<string | null>(null);
-  const [isLeftPaneOpen, setIsLeftPaneOpen] = useState(false);
+  const navigate = useNavigate();
 
+  const [isLeftPaneOpen, setIsLeftPaneOpen] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingInfo | null>(null);
   const [selectedStory, setSelectedStory] = useState<StoryInfo | null>(null);
   const [selectedFloor, setSelectedFloor] = useState<FloorInfo | null>(null);
   const [selectedLayer, setSelectedLayer] = useState<LayerInfo | null>(null);
   const [loadingBuilding, setLoadingBuilding] = useState(false);
-
+  const [buildingForms, setBuildingForms] = useState<any[]>([]);
+  const [formsLoading, setFormsLoading] = useState(false);
   const [layersModalVisible, setLayersModalVisible] = useState(false);
   const [selectedFloorForLayers, setSelectedFloorForLayers] = useState<FloorInfo | null>(null);
-const [activeTab, setActiveTab] = useState<'map' | 'pip' | 'checklist' | 'notifications' | 'profile' | 'dashboard'>('map');
-  // ── NEW: PIP form and Checklist modals ──
-  const [pipFormVisible, setPipFormVisible] = useState(false);
-  const [checklistVisible, setChecklistVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<'map' | 'pip' | 'checklist' | 'notifications' | 'profile' | 'dashboard'>('map');
+  const [mapTarget, setMapTarget] = useState<{ latitude: number; longitude: number; renovationCode?: string } | null>(null);
 
-  const navigate = useNavigate();
+  const [formModalVisible, setFormModalVisible] = useState(false);
+  const [activeFormId, setActiveFormId] = useState<number | null>(null);
+  const [activeRenovationCode, setActiveRenovationCode] = useState<string | null>(null);
+  const [activeFormData, setActiveFormData] = useState<any | null>(null);
 
   useEffect(() => {
     actions.onScreenDisplayed();
@@ -100,66 +113,48 @@ const [activeTab, setActiveTab] = useState<'map' | 'pip' | 'checklist' | 'notifi
 
   const handleQueryChanged = (q: string) => {
     actions.onQueryChanged(q);
-    if (q.length > 0) {
-      setIsLeftPaneOpen(true);
-    }
+    if (q.length > 0) setIsLeftPaneOpen(true);
   };
-
-  const handleSearchFocus = () => {
-    setIsLeftPaneOpen(true);
-  };
-
-  const [mapTarget, setMapTarget] = useState<{
-    latitude: number;
-    longitude: number;
-    renovationCode?: string;
-  } | null>(null);
 
   const handleProjectClick = (b: ApiBuildingSummaryInfo) => {
     actions.onSelectProject(b);
     setIsLeftPaneOpen(true);
     if (b.latitude && b.longitude) {
-      setMapTarget({
-        latitude: b.latitude,
-        longitude: b.longitude,
-        renovationCode: b.renovationCode,
-      });
+      setMapTarget({ latitude: b.latitude, longitude: b.longitude, renovationCode: b.renovationCode });
     }
   };
-const handleTabChange = (tab: typeof activeTab) => {
-  setActiveTab(tab);
-  if (tab === 'pip') setPipFormVisible(true);
-  if (tab === 'checklist') setChecklistVisible(true);
-};
 
-  const handleProjectSelected = (renovationCode: string | null | undefined) => {
-    if (!renovationCode) return;
-    navigate(`/summary/${renovationCode}`);
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if ((tab === 'pip' || tab === 'checklist') && activeRenovationCode && activeFormId) {
+      setFormModalVisible(true);
+    }
   };
 
-  const handleBuildingSelect = (
-    building: BuildingInfo | null,
-    story: StoryInfo | null,
-    floor: FloorInfo | null
-  ) => {
+  const handleBuildingSelect = (building: BuildingInfo, story: StoryInfo, floor: FloorInfo) => {
     setSelectedBuilding(building);
     setSelectedStory(story);
     setSelectedFloor(floor);
 
-    if (building || story) {
-      setIsLeftPaneOpen(true);
+    const code = building?.renovationCode || story?.renovationCode;
+    if (code) {
+      setActiveRenovationCode(code);
+      fetchBuildingForms(code);
     }
+
+    if (building || story) setIsLeftPaneOpen(true);
   };
 
-  const handleFloorSelect = (floor: FloorInfo) => {
-    setSelectedFloor(floor);
-  };
+  const handleFloorSelect = (floor: FloorInfo) => setSelectedFloor(floor);
 
   const handleBackToSearch = () => {
     setSelectedBuilding(null);
     setSelectedStory(null);
     setSelectedFloor(null);
     setSelectedLayer(null);
+    setActiveFormId(null);
+    setActiveRenovationCode(null);
+    setBuildingForms([]);
   };
 
   const handleCloseLeftPane = () => {
@@ -172,21 +167,71 @@ const handleTabChange = (tab: typeof activeTab) => {
     setLayersModalVisible(true);
   };
 
-  const handleCloseLayersModal = () => {
+  const handleCloseLayersModal = (updatedLayers?: any[]) => {
+    if (updatedLayers && selectedFloorForLayers && selectedBuilding) {
+      const updatedFloors = selectedBuilding.floors.map(f =>
+        f.id === selectedFloorForLayers.id ? { ...f, layers: updatedLayers } : f
+      );
+      setSelectedBuilding({ ...selectedBuilding, floors: updatedFloors });
+      if (selectedFloor?.id === selectedFloorForLayers.id) {
+        setSelectedFloor({ ...selectedFloorForLayers, layers: updatedLayers });
+      }
+    }
     setLayersModalVisible(false);
     setSelectedFloorForLayers(null);
   };
 
+  const fetchBuildingForms = async (renovationCode: string) => {
+    try {
+      setFormsLoading(true);
+      const res = await getBuildingForms(renovationCode);
+      setBuildingForms(res.data || []);
+    } catch (e) {
+      console.log('FORMS ERROR:', e);
+    } finally {
+      setFormsLoading(false);
+    }
+  };
+
+  const openForm = async (formId: number) => {
+    const renovationCode = selectedBuilding?.renovationCode || selectedStory?.renovationCode;
+    if (!renovationCode) return;
+
+    setActiveFormId(formId);
+    setActiveRenovationCode(renovationCode);
+    setActiveFormData(null);
+    setFormModalVisible(true);
+
+    try {
+      const res = await api.get(`/forms/${formId}`);
+      const json = res.data;
+      console.log('FORM RESPONSE success:', json?.success, 'groups:', json?.data?.questionGroups?.length);
+      if (json?.success) {
+        setActiveFormData({
+          ...json.data,
+          questionGroups: json.data?.questionGroups ?? [],
+        });
+      }
+    } catch (e) {
+      console.error('OPEN FORM ERROR:', e);
+    }
+  };
+
+  const handleFormSaved = (responseId: number, formType: string) => {
+    setFormModalVisible(false);
+    setActiveFormId(null);
+  };
+
   return (
     <View style={styles.root}>
-         <TabletSidebar
-      activeTab={activeTab}
-      onTabChange={handleTabChange}
-      notificationCount={3}       
-      userName="علی رضایی"
-      userRole="بازرس ارشد"
-      onLogout={() => { /* logout logic */ }}
-    />
+      <TabletSidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        notificationCount={3}
+        userName="علی رضایی"
+        userRole="بازرس ارشد"
+        onLogout={() => {}}
+      />
       {isLeftPaneOpen && (
         <View style={styles.leftPane}>
           <View style={styles.leftPaneHeader}>
@@ -212,6 +257,7 @@ const handleTabChange = (tab: typeof activeTab) => {
             <BuildingInformation
               building={selectedBuilding}
               story={selectedStory}
+              forms={buildingForms}
               floor={selectedFloor}
               floors={selectedBuilding?.floors || []}
               selectedLayer={selectedLayer}
@@ -219,6 +265,7 @@ const handleTabChange = (tab: typeof activeTab) => {
               onFloorSelect={handleFloorSelect}
               loading={loadingBuilding}
               onFloorImageClick={handleFloorImageClick}
+              onOpenForm={openForm}
             />
           ) : (
             <View style={{ flex: 1, padding: 8 }}>
@@ -236,7 +283,6 @@ const handleTabChange = (tab: typeof activeTab) => {
                 />
               )}
             </View>
-
           )}
         </View>
       )}
@@ -247,12 +293,11 @@ const handleTabChange = (tab: typeof activeTab) => {
             <SearchBox
               query={uiState.query}
               onQueryChanged={handleQueryChanged}
-              onFocus={handleSearchFocus}
+              onFocus={() => setIsLeftPaneOpen(true)}
               variant="overlay"
             />
           </View>
         )}
-
         <Map3DWeb
           flyToLocation={mapTarget}
           onBuildingSelect={handleBuildingSelect}
@@ -275,29 +320,29 @@ const handleTabChange = (tab: typeof activeTab) => {
         />
       )}
 
-      {/* ── NEW MODALS ── */}
-      <PipFormModal
-        visible={pipFormVisible}
-        onClose={() => setPipFormVisible(false)}
-      />
-      <ChecklistModal
-        visible={checklistVisible}
-        onClose={() => setChecklistVisible(false)}
-      />
+
+      <View
+      >
+    {formModalVisible && activeFormId && activeRenovationCode && (
+  <View>
+    <FormResponsePage
+      formId={activeFormId}
+      renovationCode={activeRenovationCode}
+      initialFormData={activeFormData}   
+      onSaved={handleFormSaved}
+      onClose={() => setFormModalVisible(false)}
+    />
+  </View>
+)}
+      </View>
     </View>
   );
 }
 
 function BuildingInformation({
-  building,
-  story,
-  floor,
-  floors,
-  selectedLayer,
-  onLayerSelect,
-  onFloorSelect,
-  loading,
-  onFloorImageClick
+  building, story, forms, floor, floors,
+  selectedLayer, onLayerSelect, onFloorSelect,
+  loading, onFloorImageClick, onOpenForm,
 }: {
   building: BuildingInfo | null;
   story: StoryInfo | null;
@@ -308,6 +353,8 @@ function BuildingInformation({
   onFloorSelect: (floor: FloorInfo) => void;
   loading: boolean;
   onFloorImageClick: (floor: FloorInfo) => void;
+  forms: any[];
+  onOpenForm: (id: number) => void;
 }) {
   if (loading) {
     return (
@@ -333,7 +380,7 @@ function BuildingInformation({
             <View>
               <Text style={styles.buildingLabel}>ساختمان انتخاب‌شده</Text>
               <Text style={styles.buildingName}>{story.projectName}</Text>
-              <Text style={styles.buildingCode}>کد پروژه: {story.renovationCode}</Text>
+              <Text style={styles.buildingCode}>کد نوسازی: {story.renovationCode}</Text>
             </View>
           </View>
           <View style={styles.statsGrid}>
@@ -341,6 +388,27 @@ function BuildingInformation({
               <Text style={styles.statText}>ارتفاع: {Math.round(story.height)} متر</Text>
             </View>
           </View>
+        </View>
+      )}
+
+      {forms && forms.length > 0 && (
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ fontWeight: '700', marginBottom: 8, color: '#111827' }}>
+            فرم‌های ساختمان
+          </Text>
+          {forms.map((form) => (
+            <TouchableOpacity
+              key={form.id}
+              style={styles.formItem}
+              onPress={() => onOpenForm(form.id)}
+            >
+              {form.formType === 'PIP'
+                ? <MdAssignment size={18} color="#0C4A6E" />
+                : <MdChecklist size={18} color="#166534" />
+              }
+              <Text style={styles.formItemText}>{form.title}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       )}
 
@@ -352,82 +420,51 @@ function BuildingInformation({
               <Text style={styles.floorScrollHint}>← کشیدن برای مشاهده بیشتر</Text>
             )}
           </View>
-          <View style={styles.floorScrollWrapper}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.floorButtonsContainer}
-              contentContainerStyle={styles.floorButtonsContent}
-            >
-              {floors.map((floorItem) => (
-                <TouchableOpacity
-                  key={floorItem.id}
-                  style={[
-                    styles.floorButton,
-                    floor?.id === floorItem.id && styles.floorButtonActive
-                  ]}
-                  onPress={() => onFloorSelect(floorItem)}
-                >
-                  <Text
-                    style={[
-                      styles.floorButtonText,
-                      floor?.id === floorItem.id && styles.floorButtonTextActive
-                    ]}
-                  >
-                    {floorItem.isSite
-                      ? 'سایت'
-                      : floorItem.isHalf
-                        ? `نیم‌طبقه ${floorItem.number}`
-                        : floorItem.number === 0
-                          ? 'همکف'
-                          : `طبقه ${floorItem.number}`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            {floors.length > 3 && (
-              <View style={styles.scrollGradient} pointerEvents="none" />
-            )}
-          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.floorButtonsContent}
+          >
+            {floors.map((floorItem) => (
+              <TouchableOpacity
+                key={floorItem.id}
+                style={[styles.floorButton, floor?.id === floorItem.id && styles.floorButtonActive]}
+                onPress={() => onFloorSelect(floorItem)}
+              >
+                <Text style={[styles.floorButtonText, floor?.id === floorItem.id && styles.floorButtonTextActive]}>
+                  {floorItem.isSite ? 'سایت'
+                    : floorItem.isHalf ? `نیم‌طبقه ${floorItem.number}`
+                    : floorItem.number === 0 ? 'همکف'
+                    : `طبقه ${floorItem.number}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       )}
 
-      {floor ? (
+      {floor && (
         <View style={styles.floorDetails}>
           <Text style={styles.floorTitle}>
-            {floor.isSite
-              ? 'سایت'
-              : floor.isHalf
-                ? `نیم‌طبقه ${floor.number}`
-                : floor.number === 0
-                  ? 'همکف'
-                  : `طبقه ${floor.number}`}
+            {floor.isSite ? 'سایت'
+              : floor.isHalf ? `نیم‌طبقه ${floor.number}`
+              : floor.number === 0 ? 'همکف'
+              : `طبقه ${floor.number}`}
             {' • '}
             {FLOOR_APPLICATION_FA[floor.application] || floor.application}
           </Text>
-
           <View style={styles.floorPlanContainer}>
             <TouchableOpacity
               style={styles.floorPlanImageContainer}
               onPress={() => onFloorImageClick(floor)}
               activeOpacity={0.8}
             >
-              <Image
-                source={{ uri: floor.plotUrl }}
-                style={styles.floorPlanImage}
-                resizeMode="contain"
-              />
+              <Image source={{ uri: floor.plotUrl }} style={styles.floorPlanImage} resizeMode="contain" />
               {(floor.layers || []).map((layer) => (
                 <TouchableOpacity
                   key={layer.id}
-                  style={[
-                    styles.layerMarker,
-                    { left: `${layer.posX * 100}%`, top: `${layer.posY * 100}%` },
-                  ]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    onLayerSelect(layer);
-                  }}
+                  style={[styles.layerMarker, { left: `${layer.posX * 100}%`, top: `${layer.posY * 100}%` }]}
+                  onPress={(e) => { e.stopPropagation(); onLayerSelect(layer); }}
                 >
                   <Image
                     source={LAYER_ICON_SRC[layer.type as keyof typeof LAYER_ICON_SRC] || LAYER_ICON_SRC.NOTE}
@@ -441,7 +478,6 @@ function BuildingInformation({
                 <Text style={styles.imageZoomText}>کلیک برای مدیریت لایه‌ها</Text>
               </View>
             </TouchableOpacity>
-
             {selectedLayer && (
               <View style={styles.layerDetails}>
                 <View style={styles.layerDetailsHeader}>
@@ -454,21 +490,11 @@ function BuildingInformation({
                 </View>
                 {selectedLayer.note && <Text style={styles.layerNote}>{selectedLayer.note}</Text>}
                 {selectedLayer.pictureUrl && (
-                  <Image
-                    source={{ uri: selectedLayer.pictureUrl }}
-                    style={styles.layerImage}
-                    resizeMode="contain"
-                  />
+                  <Image source={{ uri: selectedLayer.pictureUrl }} style={styles.layerImage} resizeMode="contain" />
                 )}
               </View>
             )}
           </View>
-        </View>
-      ) : story && (
-        <View style={styles.messageContainer}>
-          <Text style={styles.messageText}>
-            اطلاعات طبقه برای این ساختمان در حال بارگذاری است...
-          </Text>
         </View>
       )}
     </ScrollView>
@@ -476,12 +502,9 @@ function BuildingInformation({
 }
 
 const styles = StyleSheet.create({
-  root: {
-    minHeight: '100vh',
-    flexDirection: 'row',
-    backgroundColor: '#f8fafc',
-    height: '100vh'
-  },
+  root: { flex: 1, flexDirection: 'row', backgroundColor: '#f8fafc' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
   leftPane: {
     width: 380,
     backgroundColor: '#ffffff',
@@ -489,347 +512,121 @@ const styles = StyleSheet.create({
     borderRightColor: '#e5e7eb',
     flexDirection: 'column',
     overflow: 'hidden',
-    position: 'relative',
   },
   leftPaneHeader: {
-    position: 'relative',
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
+    position: 'relative',
   },
-  searchInPane: {
-    width: '100%',
-  },
-  rightPane: {
-    flex: 1,
-    minHeight: '100vh',
-    position: 'relative'
-  },
-  searchOverlay: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 10,
-    width: 300,
-  },
+  searchInPane: { width: '100%' },
 
-  actionButtons: {
-    position: 'absolute',
-    bottom: 24,
-    right: 16,
-    zIndex: 10,
-    flexDirection: 'column',
-    gap: 10,
-    justifyContent:'flex-start',
-    alignItems:'center',
+  rightPane: { flex: 1, position: 'relative' },
+  searchOverlay: { position: 'absolute', top: 16, right: 16, zIndex: 10, width: 300 },
+
+  backBtn: {
+    position: 'absolute', top: 16, left: 12, zIndex: 10,
+    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
   },
-  pipBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: '#ffff',
-    shadowColor: '#0C4A6E',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-  },
-  checklistBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: '#ffff',
-    shadowColor: '#166534',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-  },
-  btnIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnIconWrapGreen: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pipBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0C4A6E',
-  },
-  checklistBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#166534',
+  closeBtn: {
+    position: 'absolute', top: 16, left: 12, zIndex: 10,
+    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
   },
 
   item: {
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: '#ffffff',
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#eef2f7'
+    padding: 12, borderRadius: 16, backgroundColor: '#ffffff',
+    marginBottom: 10, borderWidth: 1, borderColor: '#eef2f7',
   },
-  itemTitle: {
-    color: '#0f172a',
-    fontSize: 16,
-    fontWeight: '700'
+  itemTitle: { color: '#0f172a', fontSize: 16, fontWeight: '700' },
+  itemSub: { color: '#64748b', marginTop: 6 },
+
+  formItem: {
+    padding: 12, borderRadius: 10, backgroundColor: '#F3F4F6',
+    marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8,
   },
-  itemSub: {
-    color: '#64748b',
-    marginTop: 6
-  },
-  backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 12,
-    zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 12,
-    zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  buildingInfo: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  buildingHeader: {
+  formItemText: { color: '#111827', fontSize: 14, flex: 1 },
+
+  formModalWrapper: { flex: 1, backgroundColor: '#f8fafc' },
+  formModalTopBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  buildingLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  buildingName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginTop: 2,
-  },
-  buildingCode: {
-    fontSize: 12,
-    color: '#374151',
-    marginTop: 2,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 8,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  statText: {
-    fontSize: 12,
-    color: '#374151',
-    textAlign: 'center',
-  },
-  floorButtonsSection: {
-    marginBottom: 16,
-  },
-  floorButtonsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  floorButtonsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  floorScrollHint: {
-    fontSize: 11,
-    color: '#9ca3af',
-    fontStyle: 'italic',
-  },
-  floorScrollWrapper: {
-    position: 'relative',
-  },
-  floorButtonsContainer: {
-    flexDirection: 'row',
-  },
-  floorButtonsContent: {
-    paddingRight: 8,
-  },
-  scrollGradient: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 20,
-    background: 'linear-gradient(to left, transparent, rgba(255, 255, 255, 0.9))',
-  },
-  floorButton: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginRight: 8,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
-  floorButtonActive: {
-    borderColor: '#0284C7',
-    backgroundColor: '#EFF6FF',
+  formModalCloseBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: '#f3f4f6', borderRadius: 8,
   },
-  floorButtonText: {
-    fontSize: 12,
-    color: '#374151',
+  formModalCloseTxt: { color: '#374151', fontSize: 14 },
+
+  infoContainer: { flex: 1, padding: 16 },
+  buildingInfo: {
+    backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12,
+    marginBottom: 16, borderWidth: 1, borderColor: '#F3F4F6',
   },
-  floorButtonTextActive: {
-    color: '#0C4A6E',
-    fontWeight: '500',
+  buildingHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  buildingLabel: { fontSize: 12, color: '#6B7280' },
+  buildingName: { fontSize: 16, fontWeight: '600', color: '#111827', marginTop: 2 },
+  buildingCode: { fontSize: 12, color: '#374151', marginTop: 2 },
+  statsGrid: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  statCard: {
+    flex: 1, backgroundColor: '#FFFFFF', borderRadius: 8, padding: 8,
+    alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 2,
   },
+  statText: { fontSize: 12, color: '#374151', textAlign: 'center' },
+
+  floorButtonsSection: { marginBottom: 16 },
+  floorButtonsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  floorButtonsTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  floorScrollHint: { fontSize: 11, color: '#9ca3af', fontStyle: 'italic' },
+  floorButtonsContent: { paddingRight: 8 },
+  floorButton: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1, borderColor: '#E5E7EB', marginRight: 8, backgroundColor: '#FFFFFF',
+  },
+  floorButtonActive: { borderColor: '#0284C7', backgroundColor: '#EFF6FF' },
+  floorButtonText: { fontSize: 12, color: '#374151' },
+  floorButtonTextActive: { color: '#0C4A6E', fontWeight: '500' },
+
   floorDetails: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: '#F3F4F6',
   },
-  floorTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  floorPlanContainer: {
-    marginTop: 8,
-  },
+  floorTitle: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 12 },
+  floorPlanContainer: { marginTop: 8 },
   floorPlanImageContainer: {
-    position: 'relative',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
+    position: 'relative', backgroundColor: '#F9FAFB',
+    borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden',
   },
-  floorPlanImage: {
-    width: '100%',
-    height: 250,
-  },
+  floorPlanImage: { width: '100%', height: 250 },
   layerMarker: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
+    position: 'absolute', width: 24, height: 24,
     transform: [{ translateX: -12 }, { translateY: -12 }],
   },
-  layerIcon: {
-    width: 24,
-    height: 24,
-  },
+  layerIcon: { width: 24, height: 24 },
   imageZoomHint: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    position: 'absolute', bottom: 8, right: 8,
+    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
   },
-  imageZoomText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  imageZoomText: { color: '#fff', fontSize: 12, fontWeight: '500' },
   layerDetails: {
-    marginTop: 12,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    padding: 12,
+    marginTop: 12, backgroundColor: '#EFF6FF', borderRadius: 8,
+    borderWidth: 1, borderColor: '#DBEAFE', padding: 12,
   },
-  layerDetailsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  layerDetailsClose: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  layerTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0C4A6E',
-    marginBottom: 4,
-  },
-  layerNote: {
-    fontSize: 12,
-    color: '#374151',
-    marginTop: 4,
-  },
+  layerDetailsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  layerDetailsClose: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  layerTitle: { fontSize: 14, fontWeight: '600', color: '#0C4A6E', marginBottom: 4 },
+  layerNote: { fontSize: 12, color: '#374151', marginTop: 4 },
   layerImage: {
-    width: '100%',
-    height: 150,
-    marginTop: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+    width: '100%', height: 150, marginTop: 8,
+    borderRadius: 4, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF',
   },
-  messageContainer: {
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  messageText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
+  messageText: { fontSize: 14, color: '#6B7280', textAlign: 'center' },
 });

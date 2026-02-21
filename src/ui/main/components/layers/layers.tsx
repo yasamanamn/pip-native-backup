@@ -20,7 +20,7 @@ import { uploadPicture } from '../../../../services/uploads.api';
 
 import { LAYER_ICON_SRC, LAYER_FA } from "../../../../constants/layerIcons";
 import { Platform } from 'react-native';
-import { addLayer as apiAddLayer, updateLayer as apiUpdateLayer, deleteLayer as apiDeleteLayer, getLayersByFloor } from '../../../../services/addLayers.api';
+import { addLayer as apiAddLayer, updateLayer as apiUpdateLayer, deleteLayer as apiDeleteLayer, } from '../../../../services/addLayers.api';
 
 interface LayerType {
   type: string;
@@ -38,7 +38,9 @@ interface Layer {
   posX: number;
   posY: number;
   description?: string;
+  note?: string;
   imageUrl?: string;
+  pictureUrl?: string;
 }
 
 
@@ -55,7 +57,7 @@ interface FloorInfo {
 
 interface LayersScreenProps {
   visible?: boolean;
-  onClose?: () => void;
+  onClose?: (updatedLayers?: Layer[]) => void;
   imageUrl?: string | null;
   layers?: Layer[];
   floorId: string;
@@ -74,6 +76,13 @@ const FLOOR_APPLICATION_FA: Record<string, string> = {
   STORAGE: 'انبار',
   OTHER: 'سایر',
 };
+
+const normalizeLayers = (rawLayers: any[]): Layer[] =>
+  (rawLayers || []).map(l => ({
+    ...l,
+    imageUrl: l.imageUrl || l.pictureUrl || '',
+    description: l.description || l.note || '',
+  }));
 
 const PlacedLayerMarker: React.FC<{
   layer: Layer;
@@ -157,9 +166,9 @@ const PlacedLayerMarker: React.FC<{
             style={{ width: 20, height: 20, pointerEvents: 'none' }}
             alt="لایه"
           />
-          {layer.imageUrl && (
+          {(layer.imageUrl || layer.pictureUrl) && (
             <img
-              src={layer.imageUrl}
+              src={layer.imageUrl || layer.pictureUrl}
               style={{
                 position: 'absolute',
                 bottom: -26,
@@ -244,7 +253,7 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
     initialCurrentFloor?.plotUrl || initialImageUrl || null
   );
   const [localLayers, setLocalLayers] = useState<Layer[]>(
-    (initialCurrentFloor?.layers as Layer[]) || layers
+    normalizeLayers((initialCurrentFloor?.layers as any[]) || layers)
   );
 
   const imageContainerRef = useRef<any>(null);
@@ -267,7 +276,7 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
       setInternalCurrentFloor(initialCurrentFloor || null);
       setInternalFloorId(floorId);
       setImageUrl(initialCurrentFloor?.plotUrl || initialImageUrl || null);
-      setLocalLayers((initialCurrentFloor?.layers as Layer[]) || layers);
+      setLocalLayers(normalizeLayers((initialCurrentFloor?.layers as any[]) || layers));
     }
   }, [visible]);
 
@@ -275,53 +284,78 @@ const LayersScreen: React.FC<LayersScreenProps> = ({
     setInternalCurrentFloor(floor);
     setInternalFloorId(String(floor.id));
     setImageUrl(floor.plotUrl || null);
-
-    try {
-      const res = await getLayersByFloor(floor.id);
-      const mapped = res.data.data.map((l: any) => ({
-        id: l.id,
-        type: l.type,
-        posX: l.posX,
-        posY: l.posY,
-        description: l.note,
-        imageUrl: l.pictureUrl
-      }));
-      setLocalLayers(mapped);
-    } catch (err) {
-      console.error('خطا در گرفتن لایه‌ها', err);
-      setLocalLayers([]);
-    }
+    setLocalLayers(normalizeLayers((floor.layers as any[]) || []));
   };
 
   const addLayerToState = (newLayer: Layer) => {
     setLocalLayers(prev => [...prev, newLayer]);
   };
 
-  // ─── این تابع دیگر فراخوانی نمی‌شود؛ همه چیز از handleSaveAll انجام می‌شود ───
-  const saveLayerToAPI = async (newLayer: Layer) => {
-    // no-op: saving is done in bulk via handleSaveAll
+  const handleSaveAll = async () => {
+    if (!internalFloorId) return;
+    setIsSaving(true);
+
+    try {
+      const updatedLayers: Layer[] = [];
+
+      for (const layer of localLayers) {
+        const layerIdStr = String(layer.id);
+        let finalImageUrl = layer.imageUrl || layer.pictureUrl || '';
+
+        if (pendingImages[layerIdStr]) {
+          try {
+            const uploaded = await uploadPicture(pendingImages[layerIdStr]);
+            finalImageUrl = uploaded.original?.url || uploaded.url || '';
+          } catch (err) {
+            console.error('خطا در آپلود تصویر:', err);
+            alert('آپلود یکی از تصاویر ناموفق بود');
+          }
+        }
+
+        if (layerIdStr.startsWith('temp_')) {
+          const response = await apiAddLayer(Number(internalFloorId), {
+            type: layer.type,
+            posX: layer.posX,
+            posY: layer.posY,
+            note: layer.description || layer.note || '',
+            pictureUrl: finalImageUrl || null,
+          });
+
+          const savedLayer = response.data.data;
+          updatedLayers.push({
+            ...layer,
+            id: savedLayer.id,
+            imageUrl: savedLayer.pictureUrl || savedLayer.imageUrl || '',
+            pictureUrl: savedLayer.pictureUrl || '',
+            description: savedLayer.note || savedLayer.description || '',
+            note: savedLayer.note || '',
+          });
+        } else {
+          await apiUpdateLayer(Number(internalFloorId), Number(layer.id), {
+            type: layer.type,
+            posX: layer.posX,
+            posY: layer.posY,
+            note: layer.description || layer.note || '',
+            pictureUrl: finalImageUrl || null,
+          });
+
+          updatedLayers.push({
+            ...layer,
+            imageUrl: finalImageUrl,
+            pictureUrl: finalImageUrl,
+          });
+        }
+      }
+
+      const normalized = normalizeLayers(updatedLayers);
+      setLocalLayers(normalized);
+      setPendingImages({});
+      alert('تغییرات با موفقیت ذخیره شد');
+
+    } finally {
+      setIsSaving(false);
+    }
   };
-
-const handleSaveAll = async () => {
-  setIsSaving(true);
-
-  // فقط نمایش پیام موقت
-  setTimeout(() => {
-    alert('تغییرات ذخیره شد ');
-    setIsSaving(false);
-  }, 500);
-
-  // بعداً می‌تونی این بخش اصلی API رو برگردونی
-  /*
-  try {
-    // کد اصلی ذخیره‌سازی لایه‌ها
-  } finally {
-    setIsSaving(false);
-  }
-  */
-};
-
-
 
   useEffect(() => {
     setShowFilters(true);
@@ -332,33 +366,8 @@ const handleSaveAll = async () => {
   }, [visible]);
 
   const handleClosePopup = () => {
+    if (onClose) onClose(localLayers);
     setShowPopup(false);
-    if (onClose) onClose();
-  };
-
-  const handleWebImageUpload = () => {
-    if (Platform.OS !== 'web') return;
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-
-    input.onchange = (e: any) => {
-      const file = e.target?.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const uri = event.target?.result as string;
-          setImageUrl(uri);
-          if (onImageUpload) {
-            onImageUpload(uri);
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-
-    input.click();
   };
 
   useEffect(() => {
@@ -390,7 +399,6 @@ const handleSaveAll = async () => {
           const posX = (e.clientX - x) / width;
           const posY = (e.clientY - y) / height;
 
-          // لایه با id موقت اضافه می‌شود؛ ذخیره واقعی فقط با دکمه «ذخیره تغییرات»
           const newLayer: Layer = {
             id: `temp_${Date.now()}`,
             type: webDragType,
@@ -507,7 +515,6 @@ const handleSaveAll = async () => {
                 };
 
                 runOnJS(addLayerToState)(newLayer);
-                // ذخیره واقعی فقط با دکمه «ذخیره تغییرات»
               }
             });
           }
@@ -813,77 +820,6 @@ const handleSaveAll = async () => {
                     )}
                   </View>
                 )}
-
-                {/* ── بخش ویرایش لایه ── */}
-                <View style={styles.imageActionsRow}>
-                  {selectedLayer && (
-                    <View style={styles.layerEditBox}>
-                      <View style={styles.layerEditRow}>
-                        <View style={styles.layerUploadColumn}>
-                          <TouchableOpacity
-                            style={styles.layerUploadButton}
-                            onPress={async () => {
-                              const input = document.createElement('input');
-                              input.type = 'file';
-                              input.accept = 'image/*';
-
-                              input.onchange = async (e: any) => {
-                                const file = e.target.files[0];
-                                if (!file) return;
-
-                                const localUrl = URL.createObjectURL(file);
-
-                                setPendingImages(prev => ({
-                                  ...prev,
-                                  [String(selectedLayer.id)]: file
-                                }));
-
-                                setLocalLayers(prev =>
-                                  prev.map(l =>
-                                    l.id === selectedLayer.id ? { ...l, imageUrl: localUrl } : l
-                                  )
-                                );
-                              };
-
-                              input.click();
-                            }}
-                          >
-                            <Text style={styles.layerUploadButtonText}>آپلود عکس</Text>
-                          </TouchableOpacity>
-
-                          {selectedLayer.imageUrl ? (
-                            <Image
-                              source={{ uri: selectedLayer.imageUrl }}
-                              style={styles.layerPreviewImage}
-                            />
-                          ) : (
-                            <View style={styles.layerPreviewPlaceholder}>
-                              <Text style={styles.layerPreviewPlaceholderText}>بدون تصویر</Text>
-                            </View>
-                          )}
-                        </View>
-
-                        <View style={styles.layerDescriptionColumn}>
-                          <TextInput
-                            style={styles.layerDescriptionInput}
-                            placeholder="توضیحات"
-                            value={selectedLayer.description}
-                            onChangeText={(text) => {
-                              setLocalLayers(prev =>
-                                prev.map(l =>
-                                  l.id === selectedLayer.id ? { ...l, description: text } : l
-                                )
-                              );
-                            }}
-                            multiline
-                            textAlign="right"
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  )}
-                </View>
-
               </View>
 
               <View style={styles.layersPanel}>
@@ -1022,6 +958,126 @@ const handleSaveAll = async () => {
           `}</style>
         )}
       </Modal>
+
+      <Modal
+        visible={!!selectedLayer}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedLayerId(null)}
+      >
+        <View style={styles.editModalOverlay}>
+          <View style={styles.editModalContainer}>
+            <View style={styles.editModalHeader}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setSelectedLayerId(null)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+              <Text style={styles.editModalTitle}>ویرایش لایه</Text>
+            </View>
+
+            {selectedLayer && (
+              <View style={styles.editModalBody}>
+                <View style={styles.editModalImageSection}>
+                  <TouchableOpacity
+                    style={styles.layerUploadButton}
+                    onPress={() => {
+                      if (Platform.OS !== 'web') return;
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = async (e: any) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+
+                        try {
+                          const uploaded = await uploadPicture(file);
+                          const uploadedUrl = uploaded.original?.url || uploaded.url || '';
+
+                          setPendingImages(prev => ({
+                            ...prev,
+                            [String(selectedLayer!.id)]: file,
+                          }));
+
+                          
+                          setLocalLayers(prev =>
+                            prev.map(l =>
+                              l.id === selectedLayer!.id
+                                ? { ...l, imageUrl: uploadedUrl, pictureUrl: uploadedUrl }
+                                : l
+                            )
+                          );
+
+                          setSelectedLayer(prev =>
+                            prev ? { ...prev, imageUrl: uploadedUrl, pictureUrl: uploadedUrl } : prev
+                          );
+
+                          if (onImageUpload) onImageUpload(uploadedUrl);
+                        } catch (err) {
+                          console.error('خطا در آپلود تصویر:', err);
+                          alert('آپلود تصویر ناموفق بود');
+                        }
+                      };
+
+                      input.click();
+                    }}
+                  >
+                    <Text style={styles.layerUploadButtonText}>آپلود عکس</Text>
+                  </TouchableOpacity>
+
+                  {(selectedLayer.imageUrl || selectedLayer.pictureUrl) ? (
+                    <Image
+                      source={{ uri: selectedLayer.imageUrl || selectedLayer.pictureUrl }}
+                      style={styles.editModalPreviewImage}
+                    />
+                  ) : (
+                    <View style={styles.editModalPreviewPlaceholder}>
+                      <Text style={styles.layerPreviewPlaceholderText}>بدون تصویر</Text>
+                    </View>
+                  )}
+                </View>
+                <TextInput
+                  style={styles.editModalDescriptionInput}
+                  placeholder="توضیحات لایه را وارد کنید..."
+                  value={selectedLayer?.description || selectedLayer?.note || ''}
+                  onChangeText={(text) => {
+                    setLocalLayers(prev =>
+                      prev.map(l =>
+                        l.id === selectedLayer?.id
+                          ? { ...l, description: text, note: text }
+                          : l
+                      )
+                    );
+                    setSelectedLayer(prev =>
+                      prev ? { ...prev, description: text, note: text } : prev
+                    );
+                  }}
+                  multiline
+                  textAlign="right"
+                />
+
+                <TouchableOpacity
+                  style={styles.editModalConfirmButton}
+                  onPress={() => {
+                    if (selectedLayer) {
+                      setLocalLayers(prev =>
+                        prev.map(l =>
+                          l.id === selectedLayer.id ? { ...l, ...selectedLayer } : l
+                        )
+                      );
+                    }
+                    setSelectedLayerId(null);
+                  }}
+                >
+                  <Text style={styles.editModalConfirmText}>تایید</Text>
+                </TouchableOpacity>
+
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1029,6 +1085,87 @@ const handleSaveAll = async () => {
 const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  editModalContainer: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 30,
+    elevation: 12,
+  },
+  editModalHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333333',
+  },
+  editModalBody: {
+    padding: 20,
+    gap: 16,
+  },
+  editModalImageSection: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  editModalPreviewImage: {
+    width: 140,
+    height: 140,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  editModalPreviewPlaceholder: {
+    width: 140,
+    height: 140,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editModalDescriptionInput: {
+    minHeight: 100,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    backgroundColor: '#fafafa',
+    fontSize: 14,
+    textAlignVertical: 'top',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  editModalConfirmButton: {
+    paddingVertical: 14,
+    backgroundColor: '#22c55e',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  editModalConfirmText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
   container: {
     flex: 1,
   },
