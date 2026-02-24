@@ -1,3 +1,4 @@
+//siddebar
 import React, { useState, useEffect } from 'react';
 import {
     View,
@@ -33,11 +34,13 @@ const NAV_ITEMS: {
     icon: React.ReactNode;
     accent: string;
 }[] = [
-        { id: 'map', label: 'نقشه', icon: <MdMap size={22} />, accent: '#b45309' },
-        { id: 'pip', label: 'فرم PIP', icon: <MdAssignment size={22} />, accent: '#b45309' },
-        { id: 'checklist', label: 'چک‌لیست', icon: <MdChecklist size={22} />, accent: '#b45309' },
-        { id: 'notifications', label: 'اعلان‌ها', icon: <MdNotifications size={22} />, accent: '#b45309' },
+        { id: 'map', label: 'نقشه', icon: <MdMap size={22} />, accent: '#3e5c76' },
+        { id: 'pip', label: 'فرم PIP', icon: <MdAssignment size={22} />, accent: '#3e5c76' },
+        { id: 'checklist', label: 'چک‌لیست', icon: <MdChecklist size={22} />, accent: '#3e5c76' },
+        { id: 'notifications', label: 'اعلان‌ها', icon: <MdNotifications size={22} />, accent: '#3e5c76' },
     ];
+
+const ALWAYS_FIRE_TABS: SidebarTab[] = ['pip', 'checklist'];
 
 export default function TabletSidebar({
     activeTab = 'map',
@@ -48,7 +51,6 @@ export default function TabletSidebar({
     const [expanded, setExpanded] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
 
-    // ─── بارگذاری اطلاعات کاربر از AsyncStorage ───
     const [userPhone, setUserPhone] = useState<string>('');
     const [userRole, setUserRole] = useState<string>('');
     const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
@@ -59,7 +61,6 @@ export default function TabletSidebar({
                 const raw = await AsyncStorage.getItem('user');
                 if (raw) {
                     const user = JSON.parse(raw);
-                    // شماره موبایل یا ایمیل — هر فیلدی که سرور برمی‌گردونه
                     setUserPhone(user.phoneNumber ?? user.phone ?? user.mobile ?? user.email ?? '');
                     setUserRole(user.role ?? user.userRole ?? '');
                     setUserAvatarUrl(user.avatarUrl ?? user.profilePicture ?? null);
@@ -73,6 +74,10 @@ export default function TabletSidebar({
 
     const sidebarWidth = expanded ? 200 : 72;
 
+    const handleNavPress = (tabId: SidebarTab) => {
+        onTabChange?.(tabId);
+    };
+
     return (
         <View style={[styles.sidebar, { width: sidebarWidth }]}>
             {/* ─── Logo / Toggle ─── */}
@@ -84,13 +89,12 @@ export default function TabletSidebar({
                 <View style={styles.logoIcon}>
                     <MdApartment size={22} color="#fff" />
                 </View>
-                {expanded && <Text style={[styles.appName, { flexWrap: 'wrap' }]}>سامانه برنامه‌ریزی پیش از حادثه
+                {expanded && <Text style={[styles.appName, { flexWrap: 'wrap' }]}>سامانه برنامه‌ریزی پیش از حادثه شهر مشهد
                 </Text>}
             </TouchableOpacity>
 
             <View style={styles.divider} />
 
-            {/* ─── Nav Items ─── */}
             <View style={styles.navList}>
                 {NAV_ITEMS.map((item) => {
                     const isActive = activeTab === item.id;
@@ -99,7 +103,7 @@ export default function TabletSidebar({
                         <TouchableOpacity
                             key={item.id}
                             style={[styles.navItem, isActive && { backgroundColor: item.accent + '18' }]}
-                            onPress={() => onTabChange?.(item.id)}
+                            onPress={() => handleNavPress(item.id)}
                             activeOpacity={0.75}
                         >
                             {isActive && <View style={[styles.activeBar, { backgroundColor: item.accent }]} />}
@@ -128,7 +132,6 @@ export default function TabletSidebar({
             <View style={{ flex: 1 }} />
             <View style={styles.divider} />
 
-            {/* ─── Settings ─── */}
             <TouchableOpacity style={styles.navItem} activeOpacity={0.75}>
                 <View style={styles.iconWrap}>
                     <MdSettings size={20} color="#9ca3af" />
@@ -136,7 +139,6 @@ export default function TabletSidebar({
                 {expanded && <Text style={styles.navLabel} numberOfLines={1}>تنظیمات</Text>}
             </TouchableOpacity>
 
-            {/* ─── Profile Button ─── */}
             <TouchableOpacity
                 style={[styles.profileBtn, profileOpen && styles.profileBtnActive]}
                 onPress={() => setProfileOpen((p) => !p)}
@@ -160,7 +162,6 @@ export default function TabletSidebar({
                 )}
             </TouchableOpacity>
 
-            {/* ─── Profile Popup ─── */}
             {profileOpen && (
                 <View style={[styles.profilePopup, expanded ? { left: 208 } : { left: 80 }]}>
                     <View style={styles.popupHeader}>
@@ -205,7 +206,7 @@ const styles = StyleSheet.create({
         transition: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
     } as any,
     logoArea: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
-    logoIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#ef8354', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    logoIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#3e5c76', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     appName: { fontSize: 14, fontWeight: '700', color: '#0f172a', flex: 1 },
     divider: { height: 1, backgroundColor: '#f1f5f9', marginHorizontal: 12, marginVertical: 8 },
     navList: { flexDirection: 'column', gap: 2, paddingHorizontal: 8 },
@@ -214,7 +215,7 @@ const styles = StyleSheet.create({
     iconWrap: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' },
     badge: { position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
     badgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
-    navLabel: { fontSize: 13, color: '#6b7280', flex: 1, fontWeight: '500' },
+    navLabel: { fontSize: 13, color: '#6b7280', flex: 1, fontWeight: '500'},
     profileBtn: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 8, marginBottom: 4, borderRadius: 12, padding: 8, gap: 10, backgroundColor: 'transparent' },
     profileBtnActive: { backgroundColor: '#f1f5f9' },
     avatarWrap: { position: 'relative', flexShrink: 0 },

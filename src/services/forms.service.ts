@@ -1,40 +1,62 @@
 import { api } from '../config/api.config';
 
-export type FormInfo = {
-  id: number;
-  title: string;
-  code: string;
-  description: string;
-  formType: string; // PIP یا FIRECHECKLIST
-  _count: {
-    questions: number;
-  };
-};
-
-export type BuildingFormsResponse = {
+export interface FormResponse {
   success: boolean;
-  data: FormInfo[];
-  missingFormTypes: string[];
-};
+  data: any;
+  message?: string;
+}
 
-export const getBuildingForms = async (
-  renovationCode: string
-): Promise<BuildingFormsResponse> => {
+export const getBuildingForms = async (renovationCode: string): Promise<FormResponse> => {
   try {
-    const res = await api.get(`/forms/building/${encodeURIComponent(renovationCode)}`);
-    return res.data;
-  } catch (err: any) {
-    console.error('Error fetching building forms:', err);
-    throw new Error('Fetch building forms failed');
+    const response = await api.get(`/forms/building/${renovationCode}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching building forms:', error);
+    throw error;
   }
 };
 
-export const getFormById = async (formId: number) => {
+export const getFormById = async (formId: number): Promise<FormResponse> => {
   try {
-    const res = await api.get(`/forms/${formId}`);
-    return res.data;
-  } catch (err: any) {
-    console.error('Error fetching form details:', err);
-    throw new Error('Fetch form details failed');
+    const response = await api.get(`/forms/${formId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching form:', error);
+    throw error;
+  }
+};
+
+export const submitFormResponses = async (
+  formId: number,
+  data: { renovationCode: string; answers: any[] }
+): Promise<FormResponse> => {
+  try {
+    const response = await api.put(`/forms/${formId}/responses`, data);
+    return response.data;
+  } catch (error) {
+    console.error('Error submitting form:', error);
+    throw error;
+  }
+};
+
+export const uploadFile = async (
+  file: any,
+  questionId: number
+): Promise<{ success: boolean; url: string }> => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('questionId', questionId.toString());
+
+    const response = await api.post('/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    throw error;
   }
 };

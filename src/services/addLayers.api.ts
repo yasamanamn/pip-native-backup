@@ -21,6 +21,10 @@ export const updateLayer = (floorId: string, layerId: string, layer: LayerPayloa
   return api.patch(`/floors/${floorId}/layers/${layerId}`, layer);
 };
 
+export const deleteLayer = (floorId: string, layerId: string) => {
+  return api.delete(`/floors/${floorId}/layers/${layerId}`);
+};
+
 export const getLayersByFloor = async (floorId: string) => {
   const res = await api.get(`/floors/${floorId}/layers`);
   return res.data;

@@ -11,55 +11,70 @@ module.exports = {
   clean: true,
 },
 
-  resolve: {
+resolve: {
   alias: {
     'react-native$': 'react-native-web',
     'react-native-reanimated': path.resolve(__dirname, 'reanimated-web-shim.js'),
     'react-native-worklets': 'react-native-worklets-core',
+
+    '@expo/vector-icons/MaterialCommunityIcons': path.resolve(__dirname, 'src/components/PaperIconShim.js'),
   },
   extensions: ['.web.js', '.web.tsx', '.js', '.jsx', '.ts', '.tsx'],
 },
 
-  // This section silences the TurboModuleRegistry warning
   stats: {
     warningsFilter: [/export 'TurboModuleRegistry' was not found in 'react-native'/],
   },
-  module: {
-    rules: [
-      {
-        test: /\.[jt]sx?$/,
-        // Expanded include to ensure Reanimated and Worklets are transpiled for web
-        include: [
-          path.resolve(__dirname, 'index.web.js'),
-          path.resolve(__dirname, 'App.tsx'),
-          path.resolve(__dirname, 'AppRouter.tsx'),
-          path.resolve(__dirname, 'src'),
-          path.resolve(__dirname, 'node_modules/react-native-vector-icons'),
-          path.resolve(__dirname, 'node_modules/react-native-reanimated'),
-          path.resolve(__dirname, 'node_modules/react-native-worklets-core'),
-        ],
-	use: {
-        loader: 'babel-loader',
-        options: {
-          cacheDirectory: true,
-        },
-      },
-      },
-      {
-        test: /\.m?js$/,
-        resolve: { fullySpecified: false },
-      },
-      {
-        test: /\.(png|jpg|jpeg|gif|svg)$/,
-        type: 'asset/resource',
-      },
-      {
-        test: /\.css$/i,
-        include: /node_modules/,
-        use: ['style-loader', 'css-loader'],
-      },
-    ],
+ module: {
+  rules: [
+{
+  test: /\.[jt]sx?$/,
+  include: [
+    path.resolve(__dirname, 'index.web.js'),
+    path.resolve(__dirname, 'App.tsx'),
+    path.resolve(__dirname, 'AppRouter.tsx'),
+    path.resolve(__dirname, 'src'),
+    path.resolve(__dirname, 'node_modules/react-native-vector-icons'),
+    path.resolve(__dirname, 'node_modules/react-native-reanimated'),
+    path.resolve(__dirname, 'node_modules/react-native-worklets-core'),
+    path.resolve(__dirname, 'node_modules/@expo/vector-icons'),
+  ],
+  use: {
+    loader: 'babel-loader',
+    options: {
+      cacheDirectory: true,
+      presets: [
+        '@babel/preset-env',
+        '@babel/preset-react',
+        '@babel/preset-typescript',
+      ],
+      plugins: [
+        '@babel/plugin-proposal-class-properties',
+        'react-native-web',
+      ],
+    },
   },
+},
+
+    { test: /\.m?js$/, resolve: { fullySpecified: false } },
+
+    {
+      test: /\.(png|jpg|jpeg|gif|svg)$/,
+      type: 'asset/resource',
+    },
+
+    {
+      test: /\.ttf$/,
+      type: 'asset/resource',
+    },
+
+    {
+      test: /\.css$/i,
+      include: /node_modules/,
+      use: ['style-loader', 'css-loader'],
+    },
+  ],
+},
   plugins: [
     new HtmlWebpackPlugin({
       template: './public/index.html',

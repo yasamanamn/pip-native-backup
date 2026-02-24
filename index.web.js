@@ -1,3 +1,4 @@
+import 'react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf';
 window.process = window.process || { env: { NODE_ENV: 'development' } }
 
 if (typeof __DEV__ === 'undefined') {
